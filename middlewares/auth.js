@@ -13,15 +13,19 @@ export const auth = async (req, res, next) => {
     req.user = user; // attach user to request
     next();
   } catch (err) {
-    return res.status(401).json({ message: "Unauthorized" });
+    return res.status(401).json({ message: "Unauthorized ! Only Admin can do it !" });
   }
 };
 
 // role check
-export const authorize = (role) => {
+// authorize.js
+export const authorize = (...allowedRoles) => {
   return (req, res, next) => {
-    if (req.user.role !== role) {
-      return res.status(403).json({ message: "Forbidden: Access denied" });
+    if (!req.user || !allowedRoles.includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: "Forbidden: Access denied",
+      });
     }
     next();
   };

@@ -1,8 +1,9 @@
 import mongoose from "mongoose";
+import config from "./validateEnv.js";   // ✅ import validated env
 
 const connectDB = async () => {
   try {
-    await mongoose.connect(process.env.MONGO_URL, {
+    await mongoose.connect(config.mongoUri, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
     });
