@@ -1,26 +1,43 @@
+import cluster from "cluster";
+import os from "os";
 import mongoose from "mongoose";
 import connectDB from "./config/db.js";
-import config from "./config/validateEnv.js";  
+import config from "./config/validateEnv.js";
 import app from "./app.js";
 
+const numCPUs = os.cpus().length;
 const PORT = config.port;
 
-// Start server only after DB is connected
-connectDB().then(() => {
-  const server = app.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
+if (cluster.isPrimary) {
+  console.log(`🟢 Primary process ${process.pid} is running`);
+  console.log(`Spawning ${numCPUs} workers...`);
+
+  // Fork workers
+  for (let i = 0; i < numCPUs; i++) {
+    cluster.fork();
+  }
+
+  // Restart worker if it dies
+  cluster.on("exit", (worker, code, signal) => {
+    console.log(`❌ Worker ${worker.process.pid} died. Restarting...`);
+    cluster.fork();
   });
 
-  // Graceful shutdown
-  const shutdown = async () => {
-    console.log("👋 Shutting down gracefully...");
-    await mongoose.connection.close();
-    server.close(() => {
-      console.log("✅ Server closed, DB connection closed");
-      process.exit(0);
+} else {
+  // Worker processes have their own server
+  connectDB().then(() => {
+    const server = app.listen(PORT, () => {
+      console.log(`🚀 Worker ${process.pid} running on port ${PORT}`);
     });
-  };
 
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
-});
+    // Graceful shutdown inside workers
+    const shutdown = async () => {
+      console.log(`👋 Worker ${process.pid} shutting down...`);
+      await mongoose.connection.close();
+      server.close(() => process.exit(0));
+    };
+
+    process.on("SIGINT", shutdown);
+    process.on("SIGTERM", shutdown);
+  });
+}
